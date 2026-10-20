@@ -113,8 +113,13 @@ export async function POST(request: Request) {
 
     const parsed = registrationSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: "Enter a valid team name and member details." }, { status: 400 });
-    }
+      const issues = parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+      console.error("REGISTRATION VALIDATION FAILED", JSON.stringify(issues));
+      return NextResponse.json(
+      { error: "Enter a valid team name and member details.", issues },
+    { status: 400 },
+  );
+}
 
     const settings = await getSettings();
     if (!settings.registrationOpen) {
