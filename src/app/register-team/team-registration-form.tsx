@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 
-type Member = { name: string; email: string; rollNumber: string; year: "UG1" | "UG2" | "UG3" | "UG4"; branch: string };
-type Leader = { name: string; phone: string; rollNumber: string; year: "UG1" | "UG2" | "UG3" | "UG4"; branch: string };
-const emptyMember = (): Member => ({ name: "", email: "", rollNumber: "", year: "UG1", branch: "" });
+type Year = "UG1" | "UG2" | "UG3" | "UG4";
+type Member = { name: string; email: string; rollNumber: string; year: Year; branch: string };
+type Leader = { name: string; phone: string; rollNumber: string; year: Year; branch: string };
+const emptyMember = (year: Year = "UG1"): Member => ({ name: "", email: "", rollNumber: "", year, branch: "" });
 
 export function TeamRegistrationForm({ initialLeaderName, leaderEmail }: { initialLeaderName: string; leaderEmail: string }) {
   const [teamName, setTeamName] = useState("");
@@ -17,24 +18,179 @@ export function TeamRegistrationForm({ initialLeaderName, leaderEmail }: { initi
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  function updateMember(index: number, field: keyof Member, value: string) { setMembers((current) => current.map((member, i) => i === index ? { ...member, [field]: value } : member)); }
-  function updateLeader(field: keyof Leader, value: string) { setLeader((current) => ({ ...current, [field]: value })); }
+
+  function updateMember(index: number, field: keyof Member, value: string) {
+    setMembers((current) => current.map((member, i) => (i === index ? { ...member, [field]: value } : member)));
+  }
+  function updateLeader(field: keyof Leader, value: string) {
+    setLeader((current) => ({ ...current, [field]: value }));
+  }
+
+  // web_dev teams are UG1 only; ai_ml teams share one year from UG2-UG4.
+  // Reset every year when the track changes so the defaults match the rule.
+  function changeTrack(next: "web_dev" | "ai_ml") {
+    const defaultYear: Year = next === "web_dev" ? "UG1" : "UG2";
+    setTrack(next);
+    setLeader((current) => ({ ...current, year: defaultYear }));
+    setMembers((current) => current.map((member) => ({ ...member, year: defaultYear })));
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setSubmitting(true); setMessage(null);
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage(null);
     try {
-      const response = await fetch("/api/teams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teamName, track, leader, members, rulesAccepted, previousHackathonExperience, ...(githubUrl ? { githubUrl } : {}), ...(linkedinUrl ? { linkedinUrl } : {}) }) });
+      const payload = {
+        teamName: teamName.trim(),
+        track,
+        leader: {
+          ...leader,
+          name: leader.name.trim(),
+          // Server only accepts digits with an optional leading +
+          phone: leader.phone.replace(/[\s()-]/g, ""),
+          rollNumber: leader.rollNumber.trim(),
+          branch: leader.branch.trim(),
+        },
+        members: members.map((member) => ({
+          ...member,
+          name: member.name.trim(),
+          email: member.email.trim(),
+          rollNumber: member.rollNumber.trim(),
+          branch: member.branch.trim(),
+        })),
+        rulesAccepted,
+        previousHackathonExperience,
+        ...(githubUrl.trim() ? { githubUrl: githubUrl.trim() } : {}),
+        ...(linkedinUrl.trim() ? { linkedinUrl: linkedinUrl.trim() } : {}),
+      };
+
+      const response = await fetch("/api/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Unable to register the team.");
-      setMessage("Your team has been registered successfully.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to register the team."); }
-    finally { setSubmitting(false); }
+
+      setMessage("Your team has been registered successfully. Redirecting…");
+      // Full page load so the top nav re-reads hasTeam and hides "Register Team".
+      window.location.href = "/team";
+      return;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to register the team.");
+    }
+    setSubmitting(false);
   }
-  return <form className="mt-8 space-y-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm" onSubmit={submit}>
-    <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-slate-800">Team name<input className="mt-1.5 block w-full rounded-md border border-slate-300 px-3 py-2" value={teamName} onChange={(event) => setTeamName(event.target.value)} required minLength={3} maxLength={40} /></label><label className="block text-sm font-medium text-slate-800">Track<select className="mt-1.5 block w-full rounded-md border border-slate-300 px-3 py-2" value={track} onChange={(event) => setTrack(event.target.value as "web_dev" | "ai_ml")}><option value="web_dev">Web development (UG1)</option><option value="ai_ml">AI/ML (UG2–UG4)</option></select></label></div>
-    <fieldset className="grid gap-3 border-t border-slate-200 pt-5 sm:grid-cols-2"><legend className="mb-2 text-sm font-semibold text-slate-800">Your details (team leader)</legend><label className="text-sm font-medium text-slate-800 sm:col-span-2">Verified Google email<input aria-label="Verified leader email" className="mt-1 block w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-slate-600" value={leaderEmail} readOnly /></label><input aria-label="Your name" className="rounded-md border border-slate-300 px-3 py-2" placeholder="Full name" value={leader.name} onChange={(e) => updateLeader("name", e.target.value)} required /><input aria-label="Phone or WhatsApp number" className="rounded-md border border-slate-300 px-3 py-2" placeholder="Phone / WhatsApp" value={leader.phone} onChange={(e) => updateLeader("phone", e.target.value)} required /><input aria-label="Your roll number" className="rounded-md border border-slate-300 px-3 py-2" placeholder="Roll number" value={leader.rollNumber} onChange={(e) => updateLeader("rollNumber", e.target.value)} required /><select aria-label="Your year" className="rounded-md border border-slate-300 px-3 py-2" value={leader.year} onChange={(e) => updateLeader("year", e.target.value)}>{["UG1", "UG2", "UG3", "UG4"].map((value) => <option key={value}>{value}</option>)}</select><input aria-label="Your branch" className="rounded-md border border-slate-300 px-3 py-2 sm:col-span-2" placeholder="Branch" value={leader.branch} onChange={(e) => updateLeader("branch", e.target.value)} required /></fieldset>
-    <fieldset className="space-y-3 border-t border-slate-200 pt-5"><legend className="text-sm font-semibold text-slate-800">Teammates</legend>{members.map((member, index) => <div className="grid gap-3 rounded-md bg-slate-50 p-3 sm:grid-cols-2" key={index}><input aria-label={`Teammate ${index + 1} name`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="Full name" value={member.name} onChange={(e) => updateMember(index, "name", e.target.value)} required /><input aria-label={`Teammate ${index + 1} email`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="name@iiits.in" type="email" value={member.email} onChange={(e) => updateMember(index, "email", e.target.value)} required /><input aria-label={`Teammate ${index + 1} roll number`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="Roll number" value={member.rollNumber} onChange={(e) => updateMember(index, "rollNumber", e.target.value)} required /><select aria-label={`Teammate ${index + 1} year`} className="rounded-md border border-slate-300 px-3 py-2" value={member.year} onChange={(e) => updateMember(index, "year", e.target.value)}>{["UG1", "UG2", "UG3", "UG4"].map((value) => <option key={value}>{value}</option>)}</select><input aria-label={`Teammate ${index + 1} branch`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="Branch" value={member.branch} onChange={(e) => updateMember(index, "branch", e.target.value)} required /><button className="rounded-md px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50" type="button" disabled={members.length === 1} onClick={() => setMembers((current) => current.filter((_, i) => i !== index))}>Remove</button></div>)}<button className="rounded-md border border-primary px-3 py-2 text-sm font-semibold text-primary disabled:opacity-50" type="button" disabled={members.length >= 2} onClick={() => setMembers((current) => [...current, emptyMember()])}>Add teammate</button></fieldset>
-    <div className="grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2"><label className="text-sm font-medium text-slate-800">Previous hackathon experience<select className="mt-1.5 block w-full rounded-md border border-slate-300 px-3 py-2" value={previousHackathonExperience} onChange={(e) => setPreviousHackathonExperience(e.target.value as "none" | "1-2" | "3_or_more")}><option value="none">None</option><option value="1-2">1–2</option><option value="3_or_more">3 or more</option></select></label><div className="space-y-3"><input aria-label="GitHub URL (optional)" type="url" className="block w-full rounded-md border border-slate-300 px-3 py-2" placeholder="GitHub URL (optional)" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} /><input aria-label="LinkedIn URL (optional)" type="url" className="block w-full rounded-md border border-slate-300 px-3 py-2" placeholder="LinkedIn URL (optional)" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} /></div></div>
-    <label className="flex gap-2 text-sm text-slate-800"><input type="checkbox" checked={rulesAccepted} onChange={(e) => setRulesAccepted(e.target.checked)} required />I confirm that my team accepts the event rules.</label>
-    {message && <p aria-live="polite" className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-800">{message}</p>}<button className="w-full rounded-md bg-primary px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400" disabled={submitting} type="submit">{submitting ? "Registering…" : "Register team"}</button>
-  </form>;
+
+  return (
+    <form className="mt-8 space-y-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm" onSubmit={submit}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="block text-sm font-medium text-slate-800">
+          Team name
+          <input
+            className="mt-1.5 block w-full rounded-md border border-slate-300 px-3 py-2"
+            value={teamName}
+            onChange={(event) => setTeamName(event.target.value)}
+            required
+            minLength={3}
+            maxLength={40}
+          />
+        </label>
+        <label className="block text-sm font-medium text-slate-800">
+          Track
+          <select
+            className="mt-1.5 block w-full rounded-md border border-slate-300 px-3 py-2"
+            value={track}
+            onChange={(event) => changeTrack(event.target.value as "web_dev" | "ai_ml")}
+          >
+            <option value="web_dev">Web development (UG1)</option>
+            <option value="ai_ml">AI/ML (UG2–UG4)</option>
+          </select>
+        </label>
+      </div>
+
+      <fieldset className="grid gap-3 border-t border-slate-200 pt-5 sm:grid-cols-2">
+        <legend className="mb-2 text-sm font-semibold text-slate-800">Your details (team leader)</legend>
+        <label className="text-sm font-medium text-slate-800 sm:col-span-2">
+          Verified Google email
+          <input
+            aria-label="Verified leader email"
+            className="mt-1 block w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-slate-600"
+            value={leaderEmail}
+            readOnly
+          />
+        </label>
+        <input aria-label="Your name" className="rounded-md border border-slate-300 px-3 py-2" placeholder="Full name" value={leader.name} onChange={(e) => updateLeader("name", e.target.value)} required />
+        <input aria-label="Phone or WhatsApp number" className="rounded-md border border-slate-300 px-3 py-2" placeholder="Phone / WhatsApp (10-15 digits)" value={leader.phone} onChange={(e) => updateLeader("phone", e.target.value)} required />
+        <input aria-label="Your roll number" className="rounded-md border border-slate-300 px-3 py-2" placeholder="Roll number" value={leader.rollNumber} onChange={(e) => updateLeader("rollNumber", e.target.value)} required />
+        <select aria-label="Your year" className="rounded-md border border-slate-300 px-3 py-2" value={leader.year} onChange={(e) => updateLeader("year", e.target.value)}>
+          {["UG1", "UG2", "UG3", "UG4"].map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
+        <input aria-label="Your branch" className="rounded-md border border-slate-300 px-3 py-2 sm:col-span-2" placeholder="Branch (letters only, e.g. CSE)" value={leader.branch} onChange={(e) => updateLeader("branch", e.target.value)} required />
+      </fieldset>
+
+      <fieldset className="space-y-3 border-t border-slate-200 pt-5">
+        <legend className="text-sm font-semibold text-slate-800">Teammates</legend>
+        {members.map((member, index) => (
+          <div className="grid gap-3 rounded-md bg-slate-50 p-3 sm:grid-cols-2" key={index}>
+            <input aria-label={`Teammate ${index + 1} name`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="Full name" value={member.name} onChange={(e) => updateMember(index, "name", e.target.value)} required />
+            <input aria-label={`Teammate ${index + 1} email`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="name@iiits.in" type="email" value={member.email} onChange={(e) => updateMember(index, "email", e.target.value)} required />
+            <input aria-label={`Teammate ${index + 1} roll number`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="Roll number" value={member.rollNumber} onChange={(e) => updateMember(index, "rollNumber", e.target.value)} required />
+            <select aria-label={`Teammate ${index + 1} year`} className="rounded-md border border-slate-300 px-3 py-2" value={member.year} onChange={(e) => updateMember(index, "year", e.target.value)}>
+              {["UG1", "UG2", "UG3", "UG4"].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+            <input aria-label={`Teammate ${index + 1} branch`} className="rounded-md border border-slate-300 px-3 py-2" placeholder="Branch" value={member.branch} onChange={(e) => updateMember(index, "branch", e.target.value)} required />
+            <button className="rounded-md px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50" type="button" disabled={members.length === 1} onClick={() => setMembers((current) => current.filter((_, i) => i !== index))}>
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          className="rounded-md border border-primary px-3 py-2 text-sm font-semibold text-primary disabled:opacity-50"
+          type="button"
+          disabled={members.length >= 2}
+          onClick={() => setMembers((current) => [...current, emptyMember(leader.year)])}
+        >
+          Add teammate
+        </button>
+      </fieldset>
+
+      <div className="grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
+        <label className="text-sm font-medium text-slate-800">
+          Previous hackathon experience
+          <select
+            className="mt-1.5 block w-full rounded-md border border-slate-300 px-3 py-2"
+            value={previousHackathonExperience}
+            onChange={(e) => setPreviousHackathonExperience(e.target.value as "none" | "1-2" | "3_or_more")}
+          >
+            <option value="none">None</option>
+            <option value="1-2">1–2</option>
+            <option value="3_or_more">3 or more</option>
+          </select>
+        </label>
+        <div className="space-y-3">
+          <input aria-label="GitHub URL (optional)" type="url" className="block w-full rounded-md border border-slate-300 px-3 py-2" placeholder="GitHub URL (optional)" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} />
+          <input aria-label="LinkedIn URL (optional)" type="url" className="block w-full rounded-md border border-slate-300 px-3 py-2" placeholder="LinkedIn URL (optional)" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} />
+        </div>
+      </div>
+
+      <label className="flex gap-2 text-sm text-slate-800">
+        <input type="checkbox" checked={rulesAccepted} onChange={(e) => setRulesAccepted(e.target.checked)} required />
+        I confirm that my team accepts the event rules.
+      </label>
+
+      {message && (
+        <p aria-live="polite" className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-800">
+          {message}
+        </p>
+      )}
+      <button className="w-full rounded-md bg-primary px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400" disabled={submitting} type="submit">
+        {submitting ? "Registering…" : "Register team"}
+      </button>
+    </form>
+  );
 }
