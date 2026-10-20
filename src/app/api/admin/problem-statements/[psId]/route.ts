@@ -7,6 +7,7 @@ import { checkAdminMutationRateLimit } from "@/lib/rate-limit";
 import { getSettings } from "@/lib/settings";
 import { AuditLog } from "@/models/AuditLog";
 import { Bid } from "@/models/Bid";
+import { Holding } from "@/models/Holding";
 import { ProblemStatement } from "@/models/ProblemStatement";
 import { Team } from "@/models/Team";
 
@@ -45,27 +46,18 @@ export async function PATCH(request: Request, { params }: Params) {
     const parsed = patchSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: "Invalid problem statement data." }, { status: 400 });
 
-    // Only upcoming PS with no bids and no assigned teams may be edited
-    const existing = await ProblemStatement.findOne({ _id: psId, status: "upcoming" })
+    const existing = await ProblemStatement.findById(psId)
       .lean<{ _id: mongoose.Types.ObjectId; title: string; domain?: string; description: string; basePrice: number; capacity: number | null }>();
     if (!existing) {
-      return NextResponse.json({ error: "Problem statement not found or is not upcoming." }, { status: 409 });
-    }
-
-    const [hasBids, hasTeams] = await Promise.all([
-      Bid.exists({ problemStatementId: existing._id }),
-      Team.exists({ assignedPsId: existing._id }),
-    ]);
-    if (hasBids || hasTeams) {
-      return NextResponse.json({ error: "Cannot edit a problem statement that has bids or assigned teams." }, { status: 409 });
+      return NextResponse.json({ error: "Problem statement not found." }, { status: 404 });
     }
 
     const updated = await ProblemStatement.findOneAndUpdate(
-      { _id: psId, status: "upcoming" },
+      { _id: psId },
       { $set: parsed.data },
       { new: true },
     ).lean();
-    if (!updated) return NextResponse.json({ error: "Problem statement not found or is not upcoming." }, { status: 409 });
+    if (!updated) return NextResponse.json({ error: "Problem statement not found." }, { status: 404 });
 
     await AuditLog.create([{
       action: "ps.updated",
@@ -99,37 +91,66 @@ export async function DELETE(request: Request, { params }: Params) {
     const rl = await checkAdminMutationRateLimit(getIdentifier(request, actor.email));
     if (!rl.allowed) return NextResponse.json({ error: "Too many requests." }, { status: 429 });
 
-    const existing = await ProblemStatement.findOne({ _id: psId, status: "upcoming" })
-      .lean<{ _id: mongoose.Types.ObjectId; title: string }>();
-    if (!existing) {
-      return NextResponse.json({ error: "Problem statement not found or is not upcoming." }, { status: 409 });
+    const dbSession = await mongoose.startSession();
+    try {
+      await dbSession.withTransaction(async () => {
+        const problemStatement = await ProblemStatement.findById(psId)
+          .select({ title: 1 })
+          .session(dbSession)
+          .lean<{ _id: mongoose.Types.ObjectId; title: string }>();
+        if (!problemStatement) throw new ProblemStatementNotFoundError();
+
+        const [bids, assignedTeams] = await Promise.all([
+          Bid.find({ problemStatementId: problemStatement._id })
+            .sort({ createdAt: -1, _id: -1 })
+            .select({ teamId: 1, amount: 1 })
+            .session(dbSession)
+            .lean<Array<{ teamId: mongoose.Types.ObjectId; amount: number }>>(),
+          Team.find({ assignedPsId: problemStatement._id })
+            .select({ _id: 1, assignmentType: 1 })
+            .session(dbSession)
+            .lean<Array<{ _id: mongoose.Types.ObjectId; assignmentType: "won" | "allocated" | null }>>(),
+        ]);
+        const finalBids = new Map<string, number>();
+        for (const bid of bids) if (!finalBids.has(String(bid.teamId))) finalBids.set(String(bid.teamId), bid.amount);
+
+        let refundedTeams = 0;
+        for (const team of assignedTeams) {
+          const refund = team.assignmentType === "won" ? finalBids.get(String(team._id)) ?? 0 : 0;
+          await Team.updateOne(
+            { _id: team._id, assignedPsId: problemStatement._id },
+            { $set: { assignedPsId: null, assignmentType: null }, ...(refund ? { $inc: { balance: refund } } : {}) },
+            { session: dbSession },
+          );
+          if (refund) refundedTeams += 1;
+        }
+
+        const [holdingResult, bidResult, deleted] = await Promise.all([
+          Holding.deleteMany({ problemStatementId: problemStatement._id }, { session: dbSession }),
+          Bid.deleteMany({ problemStatementId: problemStatement._id }, { session: dbSession }),
+          ProblemStatement.findByIdAndDelete(problemStatement._id, { session: dbSession }),
+        ]);
+        if (!deleted) throw new ProblemStatementNotFoundError();
+        await AuditLog.create([{
+          action: "ps.deleted",
+          actorUserId: actor.userId,
+          targetType: "ProblemStatement",
+          targetId: problemStatement._id,
+          previousValue: { title: problemStatement.title },
+          newValue: { removedBids: bidResult.deletedCount, removedHoldings: holdingResult.deletedCount, clearedAssignments: assignedTeams.length, refundedTeams },
+        }], { session: dbSession });
+      });
+    } finally {
+      await dbSession.endSession();
     }
-
-    const [hasBids, hasTeams] = await Promise.all([
-      Bid.exists({ problemStatementId: existing._id }),
-      Team.exists({ assignedPsId: existing._id }),
-    ]);
-    if (hasBids || hasTeams) {
-      return NextResponse.json({
-        error: "Cannot delete a problem statement that has bids or assigned teams.",
-      }, { status: 409 });
-    }
-
-    const deleted = await ProblemStatement.findOneAndDelete({ _id: psId, status: "upcoming" }).lean<{ title: string }>();
-    if (!deleted) return NextResponse.json({ error: "Problem statement not found or is not upcoming." }, { status: 409 });
-
-    await AuditLog.create([{
-      action: "ps.deleted",
-      actorUserId: actor.userId,
-      targetType: "ProblemStatement",
-      targetId: psId,
-      previousValue: { title: deleted.title },
-    }]);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof AdminAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof ProblemStatementNotFoundError) return NextResponse.json({ error: "Problem statement not found." }, { status: 404 });
     console.error("Failed to delete problem statement", error);
     return NextResponse.json({ error: "Unable to delete problem statement." }, { status: 500 });
   }
 }
+
+class ProblemStatementNotFoundError extends Error {}

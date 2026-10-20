@@ -6,7 +6,6 @@ import { AdminAuthError, checkOrigin, isValidObjectId, requireAdmin } from "@/li
 import { checkAdminMutationRateLimit } from "@/lib/rate-limit";
 import { normalizeEmail } from "@/lib/roles";
 import { AuditLog } from "@/models/AuditLog";
-import { Holding } from "@/models/Holding";
 import { Team } from "@/models/Team";
 import { TeamMember } from "@/models/TeamMember";
 
@@ -43,7 +42,6 @@ export async function POST(request: Request, { params }: Params) {
         const team = await Team.findById(teamId).session(dbSession).lean<TeamForTransfer>();
         if (!team) throw new TeamNotFoundError();
         if (team.leaderEmail === newLeaderEmail) return;
-        if (await Holding.exists({ teamId: team._id }).session(dbSession)) throw new TeamHasLiveHoldingError();
         const newLeaderIsMember = await TeamMember.exists({ teamId: team._id, email: newLeaderEmail }).session(dbSession);
         if (!newLeaderIsMember) throw new NewLeaderNotMemberError();
 
@@ -70,7 +68,6 @@ export async function POST(request: Request, { params }: Params) {
     if (error instanceof AdminAuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TeamNotFoundError) return NextResponse.json({ error: "Team not found." }, { status: 404 });
     if (error instanceof NewLeaderNotMemberError) return NextResponse.json({ error: "The new leader must already be a member of this team." }, { status: 400 });
-    if (error instanceof TeamHasLiveHoldingError) return NextResponse.json({ error: "Leadership cannot be transferred while the team holds a live auction spot." }, { status: 409 });
     if (error instanceof TransferConflictError || (error as { code?: number }).code === 11000) return NextResponse.json({ error: "Leadership changed concurrently. Please try again." }, { status: 409 });
     if (error instanceof SyntaxError) return NextResponse.json({ error: "Invalid new leader email." }, { status: 400 });
     console.error("Failed to transfer team leadership", error);
@@ -80,5 +77,4 @@ export async function POST(request: Request, { params }: Params) {
 
 class TeamNotFoundError extends Error {}
 class NewLeaderNotMemberError extends Error {}
-class TeamHasLiveHoldingError extends Error {}
 class TransferConflictError extends Error {}

@@ -14,12 +14,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { AppRole } from "@/lib/roles";
 import { cn } from "@/lib/cn";
-import { signInWithGoogle, signOutAction } from "@/app/actions";
+import { signInWithGoogle } from "@/app/actions";
 import {
   MenuIcon,
   XIcon,
@@ -154,6 +155,15 @@ function MobileNavItem({
 
 function UserMenu({ role, userName }: Pick<TopNavProps, "role" | "userName">) {
   const initial = userName?.charAt(0).toUpperCase() ?? "U";
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    await signOut({ redirectTo: "/" });
+  }
+
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger
@@ -197,21 +207,23 @@ function UserMenu({ role, userName }: Pick<TopNavProps, "role" | "userName">) {
 
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
 
-          {/* Sign out — server action via form */}
+          {/* Use Auth.js's browser helper: Radix menu items do not reliably
+              submit nested forms after they handle selection. */}
           <DropdownMenu.Item asChild>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className={cn(
-                  "flex w-full min-h-[36px] cursor-pointer items-center gap-2 rounded-xl px-3 py-2",
-                  "text-sm font-medium text-error hover:bg-error/10 transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/40",
-                )}
-              >
-                <LogOutIcon className="size-4 shrink-0" />
-                Sign out
-              </button>
-            </form>
+            <button
+              type="button"
+              disabled={isSigningOut}
+              onClick={() => void handleSignOut()}
+              className={cn(
+                "flex w-full min-h-[36px] cursor-pointer items-center gap-2 rounded-xl px-3 py-2",
+                "text-sm font-medium text-error hover:bg-error/10 transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/40",
+                "disabled:cursor-not-allowed disabled:opacity-60",
+              )}
+            >
+              <LogOutIcon className="size-4 shrink-0" />
+              {isSigningOut ? "Signing out…" : "Sign out"}
+            </button>
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
