@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ────────────────────────────────────────────────────────
+   Tailwind v4 CSS-first config: @theme generates bg-*, text-*, border-*,
+   shadow-* utilities from these custom properties.
+   The --font-poppins variable is injected by layout.tsx via next/font.
+────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Brand palette */
+  --color-primary:  #0057ff; /* bg-primary, text-primary, border-primary */
+  --color-accent:   #2e8bff; /* bg-accent, text-accent — gradients & icon tiles */
+  --color-primary-hover: #0046d6; /* hover:bg-primary-hover */
+  --color-icon-tile:     #dbeafe; /* bg-icon-tile for card icon squares */
+  --color-glow-sky: #00b4ff; /* bg-glow-sky — glows only, never body text */
+  --color-glow-primary: #0057ff;
+
+  /* Text — both pass WCAG AA on white */
+  --color-deep:  #06163a; /* text-deep — headings */
+  --color-muted: #4a5d85; /* text-muted — body / labels */
+
+  /* Surfaces */
+  --color-surface: #ffffff; /* bg-surface — cards, navbar */
+  --color-tint:    #eaf3ff; /* bg-tint   — alternate-section background */
+
+  /* Border */
+  --color-border: #bfd9ff; /* border-border — card & nav borders */
+
+  /* Semantic — WCAG AA on white */
+  --color-success: #15803d; /* text-success, bg-success */
+  --color-warn:    #b45309; /* text-warn */
+  --color-error:   #dc2626; /* text-error */
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px color-mix(in srgb, var(--color-deep) 6%, transparent), 0 1px 2px color-mix(in srgb, var(--color-deep) 4%, transparent);
+  --shadow-glow: 0 0 16px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  --shadow-glow-sm: 0 0 8px color-mix(in srgb, var(--color-primary) 20%, transparent);
+
+  /* Typography — Poppins variable injected by layout.tsx */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Global base ──────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --mx: 50%;
+  --my: 50%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-surface);
+  color: var(--color-deep);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-primary) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 5%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.background-static {
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--color-glow-primary) 8%, transparent), transparent 70%);
+}
+
+.background-blob-primary {
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-glow-primary) 32%, transparent) 0%, transparent 70%);
+}
+
+.background-blob-accent {
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 28%, transparent) 0%, transparent 70%);
+}
+
+.background-blob-sky {
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-glow-sky) 18%, transparent) 0%, transparent 70%);
+}
+
+.background-cursor-large {
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-glow-primary) 20%, transparent) 0%, transparent 70%);
+}
+
+.background-cursor-core {
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-glow-sky) 30%, transparent) 0%, transparent 70%);
+}
+
+.background-grid-focus {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-primary) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 22%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle 350px at var(--mx) var(--my), black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle 350px at var(--mx) var(--my), black 0%, transparent 100%);
+}
+
+/* ─── Reduced-motion: disable every animation & transition ─────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:       0.01ms !important;
+    animation-iteration-count: 1    !important;
+    transition-duration:      0.01ms !important;
+  }
+}

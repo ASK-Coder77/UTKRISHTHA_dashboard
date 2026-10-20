@@ -1,0 +1,17 @@
+"use client";
+
+import Link from "next/link";
+import useSWR from "swr";
+
+type Result = { teamName: string; problemStatement: string | null; rank: number; totalPoints: string; breakdown: { credits: string; judgesScore: string; rounds: Array<{ name: string; score: string }> } };
+type ResultsResponse = { tracks: Record<"web_dev" | "ai_ml", Result[]>; overall?: Result[]; view: "published" | "admin_preview" };
+const fetcher = async (url: string): Promise<ResultsResponse> => { const response = await fetch(url, { cache: "no-store" }); const body = (await response.json()) as ResultsResponse & { error?: string }; if (!response.ok) throw new Error(body.error ?? "Unable to load results."); return body; };
+
+function RankingList({ title, results }: { title: string; results: Result[] }) {
+  return <section className="mt-8"><h2 className="text-xl font-bold text-slate-950">{title}</h2>{results.length === 0 ? <p className="mt-3 rounded-xl border border-slate-200 bg-white p-5 text-slate-600">No participating teams are ready to rank yet.</p> : <ol className="mt-4 space-y-4" aria-label={`${title} ranked teams`}>{results.map((result) => <li className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" key={result.teamName}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-semibold text-primary">Rank {result.rank}</p><h3 className="mt-1 text-xl font-semibold text-slate-950">{result.teamName}</h3><p className="mt-1 text-sm text-slate-600">Problem statement: {result.problemStatement ?? "Not assigned"}</p></div><p className="text-lg font-bold text-slate-950">{result.totalPoints} points</p></div><dl className="mt-5 grid gap-3 border-t border-slate-100 pt-4 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Judges&apos; score</dt><dd className="mt-1 font-semibold">{result.breakdown.judgesScore}</dd></div><div><dt className="text-slate-500">Credits</dt><dd className="mt-1 font-semibold">{result.breakdown.credits}</dd></div></dl></li>)}</ol>}</section>;
+}
+
+export function ResultsWorkspace({ showTeamLink }: { showTeamLink: boolean }) {
+  const { data, error, isLoading } = useSWR("/api/results", fetcher);
+  return <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6"><nav aria-label="Main navigation" className="mb-8 flex flex-wrap gap-4 text-sm font-semibold text-primary"><Link href="/">Home</Link><Link href="/events">Events</Link><Link href="/auction">Auction</Link>{showTeamLink && <Link href="/team">My team</Link>}</nav><p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Utkrishta</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Results</h1><p className="mt-3 max-w-2xl text-slate-600">Final scores combine judges&apos; scores and remaining credits. Individual judge scores are never displayed.</p>{isLoading && <p className="mt-8 text-slate-600" role="status">Loading results…</p>}{error && <p className="mt-8 rounded-md bg-red-50 p-4 text-red-800" role="alert">{error.message}</p>}{data?.view === "admin_preview" && <p className="mt-6 rounded-md bg-amber-50 p-4 text-amber-900" role="status">Admin preview: these results remain hidden until a super admin publishes them.</p>}{data && <><RankingList title="Web development" results={data.tracks.web_dev} /><RankingList title="AI & ML" results={data.tracks.ai_ml} />{data.overall && <RankingList title="Overall (admin view)" results={data.overall} />}</>}</main>;
+}
