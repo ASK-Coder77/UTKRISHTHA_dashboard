@@ -17,7 +17,7 @@ export default async function RegisterTeamPage() {
       <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Utkrishta</p>
       <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Register your team</h1>
       <p className="mt-3 max-w-2xl text-slate-600">You are added automatically as the team leader. Add your teammates below.</p>
-      <TeamRegistrationForm initialLeaderName={session.user?.name ?? ""} />
+      <TeamRegistrationForm initialLeaderName={session.user?.name ?? ""} leaderEmail={normalizeEmail(email)} />
     </main>
   );
 }

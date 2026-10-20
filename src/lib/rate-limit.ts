@@ -40,12 +40,12 @@ async function checkLimit(
   }
 }
 
-// --- Team registration: 5 requests / 10 minutes ---
+// --- Team registration: 5 requests / 2 minutes ---
 const teamRegistrationRef: { current: Ratelimit | null | undefined } = { current: undefined };
 export async function checkTeamRegistrationRateLimit(identifier: string): Promise<RateLimitResult> {
   return checkLimit(
     teamRegistrationRef,
-    () => makeRedisLimiter(Ratelimit.slidingWindow(5, "10 m"), "utkrishta:team-registration"),
+    () => makeRedisLimiter(Ratelimit.slidingWindow(5, "2 m"), "utkrishta:team-registration"),
     identifier,
     "Team registration",
   );
