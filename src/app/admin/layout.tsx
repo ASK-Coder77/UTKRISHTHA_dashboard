@@ -35,11 +35,13 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
             {role === "super_admin" && <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50" href="/admin/settings">Settings</Link>}
           </div>
           <nav aria-label="Admin pages" className="flex gap-2 overflow-x-auto pb-1">
-            {pages.map(([href, label]) => (
-              <Link className="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-tint hover:text-primary-hover focus:outline-none focus:ring-2 focus:ring-primary" href={href} key={href}>
-                {label}
-              </Link>
-            ))}
+            {pages
+              .filter(([href]) => href !== "/admin/users" || role === "super_admin")
+              .map(([href, label]) => (
+                <Link className="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-tint hover:text-primary-hover focus:outline-none focus:ring-2 focus:ring-primary" href={href} key={href}>
+                  {label}
+                </Link>
+              ))}
           </nav>
         </div>
       </header>

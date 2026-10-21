@@ -5,7 +5,7 @@
  *   • usePathname() — determines the active route and closes the mobile
  *     sheet after navigation; this is a browser-only hook.
  *   • useState — controls the mobile hamburger drawer open/close state.
- *   • useEffect — closes the mobile sheet on route change.
+ *   • signOut from next-auth/react — browser helper for signing out.
  *
  * The component receives all data as plain props from the Server Component
  * wrapper (top-nav-server.tsx) so no client-side data fetching is needed.
@@ -13,6 +13,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
@@ -252,8 +253,16 @@ export function TopNav({ role, userName, resultsPublished, hasTeam }: TopNavProp
           {/* Logo */}
           <Link
             href="/"
-            className="shrink-0 whitespace-nowrap text-xl font-bold tracking-tight text-deep transition-colors hover:text-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-lg md:text-2xl"
+            className="inline-flex shrink-0 items-center whitespace-nowrap text-xl font-bold tracking-tight text-deep transition-colors hover:text-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-lg md:text-2xl"
           >
+            <Image
+              src="/logo.png"
+              alt="Utkrishta logo"
+              width={36}
+              height={36}
+              priority
+              className="mr-2 size-8 md:size-9"
+            />
             <span className="text-primary">Utkrishta</span>
             <span className="text-sm font-medium text-muted md:text-base"> · PS Bid Wars</span>
           </Link>
@@ -318,7 +327,14 @@ export function TopNav({ role, userName, resultsPublished, hasTeam }: TopNavProp
 
                   {/* Sheet header */}
                   <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                    <span className="text-sm font-bold text-deep">
+                    <span className="inline-flex items-center text-sm font-bold text-deep">
+                      <Image
+                        src="/logo.png"
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="mr-2 size-6"
+                      />
                       <span className="text-primary">Utkrishta</span>
                       <span className="text-muted font-medium"> · PS Bid Wars</span>
                     </span>
@@ -349,7 +365,7 @@ export function TopNav({ role, userName, resultsPublished, hasTeam }: TopNavProp
                     ))}
                   </nav>
 
-                  {/* Sheet footer: theme slot and account control */}
+                  {/* Sheet footer: account control */}
                   <div className="mt-auto border-t border-border px-4 py-4">
                     {role ? (
                       <UserMenu role={role} userName={userName} />
@@ -363,7 +379,7 @@ export function TopNav({ role, userName, resultsPublished, hasTeam }: TopNavProp
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                           )}
                         >
-                          Sign in with Google
+                          Sign in
                         </button>
                       </form>
                     )}
