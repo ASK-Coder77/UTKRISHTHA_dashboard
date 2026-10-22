@@ -248,7 +248,7 @@ export function TopNav({ role, userName, resultsPublished, hasTeam }: TopNavProp
     <>
       {/* ── Sticky header ─────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 w-full border-b border-border bg-surface/90 backdrop-blur-md">
-        <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr]">
 
           {/* Logo */}
           <Link
